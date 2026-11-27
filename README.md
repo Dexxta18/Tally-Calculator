@@ -2,7 +2,7 @@
 
 A calculator built for narrow pop-up windows and the Samsung Edge panel. Works offline once installed.
 
-**Open it:** https://dexxta18.github.io/tally-calculator/
+**Open it:** https://dexxta18.github.io/Tally-Calculator/
 
 ## Features
 

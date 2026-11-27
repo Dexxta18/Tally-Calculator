@@ -1,0 +1,1419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#161514">
+<meta name="description" content="A calculator with a reusable paper tape, unit and currency converter, and everyday money tools. Made for narrow pop-up windows and the Edge panel.">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}</style>
+<title>Tally Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@300;400;500&family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+/* Layout: a one-screen instrument sized for a narrow side panel. A paper tape of past
+   calculations scrolls above a fixed display and keypad; when the window is wide the
+   tape and keypad sit side by side. Palette borrows from 1970s desk calculators:
+   moulded grey plastic, dark function keys, an ochre equals key. */
+:root{
+  --bg:#E2E2DE;
+  --well:#D4D3CE;
+  --paper:#ECEBE7;
+  --ink:#1B1A18;
+  --ink-2:#4F4C47;
+  --ink-3:#7D7972;
+  --rule:#C6C4BE;
+  --accent:#E9A11B;
+  --accent-text:#8F5800;
+  --danger:#B23A22;
+  --key:#F7F6F3;   --key-ink:#1B1A18;
+  --key-op:#2A2826; --key-op-ink:#F2B53F;
+  --key-eq:#E9A11B; --key-eq-ink:#1B1A18;
+  --key-fn:#D0CEC8; --key-fn-ink:#2B2927;
+  --key-shadow:0 1px 0 rgba(255,255,255,.75) inset, 0 -2px 0 rgba(0,0,0,.08) inset, 0 1px 2px rgba(0,0,0,.10);
+  --scrim:rgba(20,19,18,.38);
+  --toast-bg:#2A2826; --toast-ink:#F1EEE8;
+  --font-num:'Azeret Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --font-ui:'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --kh:clamp(34px, min(15vw, 8.4vh), 74px);
+  --gap:clamp(5px, 1.8vw, 10px);
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161514; --well:#242220; --paper:#1D1C1A;
+    --ink:#F1EEE8; --ink-2:#B9B4AC; --ink-3:#827D75; --rule:#33302D;
+    --accent:#F0AA22; --accent-text:#F2B53F; --danger:#FF7D60;
+    --key:#2B2927; --key-ink:#F1EEE8;
+    --key-op:#3B3834; --key-op-ink:#F2B53F;
+    --key-eq:#F0AA22; --key-eq-ink:#161514;
+    --key-fn:#22201E; --key-fn-ink:#CBC5BB;
+    --key-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 -2px 0 rgba(0,0,0,.35) inset, 0 1px 2px rgba(0,0,0,.45);
+    --scrim:rgba(0,0,0,.55);
+    --toast-bg:#F1EEE8; --toast-ink:#1B1A18;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161514; --well:#242220; --paper:#1D1C1A;
+  --ink:#F1EEE8; --ink-2:#B9B4AC; --ink-3:#827D75; --rule:#33302D;
+  --accent:#F0AA22; --accent-text:#F2B53F; --danger:#FF7D60;
+  --key:#2B2927; --key-ink:#F1EEE8;
+  --key-op:#3B3834; --key-op-ink:#F2B53F;
+  --key-eq:#F0AA22; --key-eq-ink:#161514;
+  --key-fn:#22201E; --key-fn-ink:#CBC5BB;
+  --key-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 -2px 0 rgba(0,0,0,.35) inset, 0 1px 2px rgba(0,0,0,.45);
+  --scrim:rgba(0,0,0,.55);
+  --toast-bg:#F1EEE8; --toast-ink:#1B1A18;
+  color-scheme:dark;
+}
+
+html{height:100%;box-sizing:border-box}
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:14px;
+  overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg{display:block}
+
+.app{height:100%;display:flex;flex-direction:column;gap:8px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:8px 12px;position:relative;max-width:100%}
+
+/* ---------- top bar ---------- */
+.topbar{flex:none;display:flex;align-items:center;gap:8px;min-width:0}
+.tabs{flex:1;min-width:0;display:flex;gap:2px;padding:3px;background:var(--well);border-radius:12px}
+.tab{flex:1;min-width:0;height:34px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:9px;
+  font-weight:700;font-size:13px;color:var(--ink-2);letter-spacing:.01em}
+.tab svg{width:17px;height:17px;flex:none}
+.tab[aria-selected="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.icon-btn{width:40px;height:40px;flex:none;display:grid;place-items:center;border-radius:12px;color:var(--ink-2)}
+.icon-btn:active{background:var(--well)}
+.icon-btn svg{width:20px;height:20px}
+@media (max-width:300px){ .tab span{display:none} }
+
+.panel{flex:1;min-height:0;display:flex;flex-direction:column}
+.panel[hidden]{display:none!important}
+
+/* ---------- tape ---------- */
+.tape-wrap{flex:1 1 0;min-height:0;display:flex;flex-direction:column;border-radius:var(--r);background:var(--paper);overflow:hidden}
+.tape-head{flex:none;display:flex;align-items:center;gap:8px;padding:8px 10px 6px 12px;
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.tape-head .grow{flex:1}
+.text-btn{font-size:12px;font-weight:700;letter-spacing:.02em;color:var(--accent-text);padding:4px 6px;border-radius:8px;text-transform:none}
+.text-btn:active{background:var(--well)}
+.tape{flex:1;min-height:0;overflow-y:auto;margin:0;padding:0 0 6px;list-style:none;overscroll-behavior:contain;
+  -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 14px);mask-image:linear-gradient(to bottom, transparent 0, #000 14px)}
+.day{padding:12px 12px 4px;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  display:flex;align-items:center;gap:8px}
+.day::after{content:"";flex:1;border-top:1px dashed var(--rule)}
+.entry{display:flex;align-items:center;gap:4px;padding:0 6px 0 4px;border-bottom:1px dashed var(--rule)}
+.entry:last-child{border-bottom:0}
+.entry .copy{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:10px;color:var(--ink-3)}
+.entry .copy svg{width:18px;height:18px}
+.entry .copy:active{background:var(--well);color:var(--ink)}
+.entry-body{flex:1;min-width:0;text-align:right;padding:8px 6px;border-radius:10px;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.entry-body:active,.entry-body.pressing{background:var(--well)}
+.e-expr{font-family:var(--font-num);font-size:12.5px;color:var(--ink-2);max-width:100%;overflow-wrap:anywhere}
+.e-res{font-family:var(--font-num);font-size:17px;font-weight:400;color:var(--ink);max-width:100%;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.e-res .eq{color:var(--accent-text)}
+.e-tag{font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--key-eq-ink);background:var(--accent);padding:1px 7px;border-radius:99px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tape-empty{padding:18px 14px;color:var(--ink-3);font-size:12.5px;line-height:1.5;text-align:center;text-wrap:balance}
+.op{color:var(--accent-text)}
+.cm{margin-inline:-.17em}
+
+/* ---------- display ---------- */
+.calc-main{flex:none;display:flex;flex-direction:column}
+.display{padding:10px 4px 2px;min-height:calc(var(--kh) * 1.55);display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;touch-action:pan-y}
+.expr{font-family:var(--font-num);font-weight:300;text-align:right;white-space:nowrap;overflow:hidden;line-height:1.15;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--ink);font-size:44px}
+.expr.wrap{white-space:normal;overflow-wrap:anywhere;max-height:3.5em;overflow-y:auto}
+.expr .zero{color:var(--ink-3)}
+.expr.done{font-weight:400}
+.expr.pop{animation:pop .22s ease-out}
+@keyframes pop{from{transform:translateY(6px);opacity:.4}to{transform:none;opacity:1}}
+.preview{font-family:var(--font-num);font-size:17px;color:var(--ink-3);text-align:right;min-height:1.5em;line-height:1.5;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.preview.err{color:var(--danger);font-family:var(--font-ui);font-weight:700;font-size:14px}
+
+.ctl-row{display:flex;align-items:center;gap:6px;padding:4px 0 8px}
+.ctl-row .grow{flex:1}
+.chip{height:32px;padding:0 12px;border-radius:99px;background:var(--well);font-weight:700;font-size:12.5px;color:var(--ink-2);letter-spacing:.02em}
+.chip[aria-pressed="true"]{background:var(--key-op);color:var(--key-op-ink)}
+.chip.mono{font-family:var(--font-num);font-weight:500;font-size:11.5px}
+.bksp{width:48px;height:36px;display:grid;place-items:center;border-radius:12px;color:var(--ink-2)}
+.bksp svg{width:24px;height:24px}
+.bksp:active{background:var(--well);color:var(--ink)}
+
+/* ---------- keys ---------- */
+.keys,.sci{display:grid;grid-template-columns:repeat(4, 1fr);gap:var(--gap)}
+.keys{grid-auto-rows:var(--kh)}
+.sci{grid-template-columns:repeat(5, 1fr);grid-auto-rows:calc(var(--kh) * .66);margin-bottom:var(--gap)}
+.k{border-radius:var(--r);background:var(--key);color:var(--key-ink);box-shadow:var(--key-shadow);
+  font-weight:600;font-size:calc(var(--kh) * .4);display:grid;place-items:center;min-width:0;
+  transition:transform .06s ease, filter .06s ease}
+.k:active,.k.down{transform:translateY(1px) scale(.97);filter:brightness(.92)}
+.k.op{background:var(--key-op);color:var(--key-op-ink);font-size:calc(var(--kh) * .46);font-weight:500}
+.k.fn{background:var(--key-fn);color:var(--key-fn-ink);font-size:calc(var(--kh) * .36)}
+.k.clr{color:var(--danger);font-weight:800}
+.k.eq{background:var(--key-eq);color:var(--key-eq-ink);font-size:calc(var(--kh) * .5);font-weight:600}
+.sci .k{font-size:clamp(11px, calc(var(--kh) * .27), 16px);font-weight:700;border-radius:calc(var(--r) - 3px);background:var(--key-fn);color:var(--key-fn-ink)}
+.sci .k sup{font-size:.7em;line-height:0}
+
+@media (max-height:560px){ #panel-calc .tape-wrap{display:none} #panel-calc{justify-content:flex-end} }
+@media (min-width:640px){
+  #panel-calc{flex-direction:row;gap:16px}
+  #panel-calc .tape-wrap{display:flex}
+  #panel-calc .calc-main{flex:0 0 min(440px, 55%);justify-content:flex-end}
+  .app{padding-block:12px 16px}
+}
+
+/* ---------- convert + tools ---------- */
+.scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;padding-bottom:16px}
+@media (min-width:640px){ .scroll > *{width:100%;max-width:520px;margin-inline:auto} }
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chips .chip{flex:none}
+.chips .chip[aria-selected="true"]{background:var(--key-op);color:var(--key-op-ink)}
+.card{background:var(--paper);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+.label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.input,.select{width:100%;min-width:0;height:44px;border-radius:11px;border:1.5px solid transparent;background:var(--well);
+  padding:0 12px;font-size:16px;-webkit-user-select:text;user-select:text}
+.input{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.input:focus,.select:focus{outline:none;border-color:var(--accent)}
+.input.bad{border-color:var(--danger)}
+.input::placeholder{color:var(--ink-3)}
+.select{font-weight:600;font-size:14px;appearance:none;-webkit-appearance:none;padding-right:30px;
+  background-image:linear-gradient(45deg, transparent 50%, var(--ink-2) 50%), linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position:calc(100% - 16px) 19px, calc(100% - 11px) 19px;background-size:5px 5px;background-repeat:no-repeat}
+.big-out{font-family:var(--font-num);font-size:clamp(24px, 9vw, 36px);font-weight:300;letter-spacing:-.02em;text-align:left;
+  overflow-wrap:anywhere;line-height:1.15;font-variant-numeric:tabular-nums;padding:2px 0;border-radius:8px;cursor:pointer}
+.big-out:active{background:var(--well)}
+.swap-row{display:flex;align-items:center;gap:8px;margin:-4px 0}
+.swap-row::before,.swap-row::after{content:"";flex:1;border-top:1px dashed var(--rule)}
+.swap{width:40px;height:40px;border-radius:99px;background:var(--key-op);color:var(--key-op-ink);display:grid;place-items:center}
+.swap svg{width:18px;height:18px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row > *{flex:1 1 120px}
+.btn{height:40px;border-radius:11px;background:var(--well);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;gap:6px;padding:0 12px}
+.btn.primary{background:var(--key-op);color:var(--key-op-ink)}
+.btn:active{filter:brightness(.93)}
+.meta{font-size:12px;color:var(--ink-3);line-height:1.5;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.meta b{color:var(--ink-2);font-weight:700}
+.meta .text-btn{padding:2px 4px}
+.switch{display:flex;align-items:center;gap:10px;min-height:40px;cursor:pointer}
+.switch input{appearance:none;-webkit-appearance:none;width:40px;height:24px;border-radius:99px;background:var(--rule);position:relative;flex:none;margin:0;transition:background .15s;cursor:pointer}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--paper);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(16px)}
+.switch span{flex:1;font-weight:600;font-size:13.5px}
+.inline-rate{display:flex;align-items:center;gap:6px;font-family:var(--font-num);font-size:13px;color:var(--ink-2);flex-wrap:wrap}
+.inline-rate .input{width:auto;flex:1;min-width:90px;height:38px;font-size:15px}
+.ref{width:100%;border-collapse:collapse;font-family:var(--font-num);font-size:13px;font-variant-numeric:tabular-nums}
+.ref td{padding:7px 2px;border-top:1px dashed var(--rule)}
+.ref td:last-child{text-align:right;color:var(--ink)}
+.ref td:first-child{color:var(--ink-2)}
+.ref tr:first-child td{border-top:0}
+.ref tr{cursor:pointer}
+.ref tr:active td{background:var(--well)}
+
+.results{display:flex;flex-direction:column}
+.res-head{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding-bottom:4px}
+.pill{font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:99px;background:var(--well);color:var(--ink-2)}
+.res{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:9px 4px;border-top:1px dashed var(--rule);border-radius:6px;cursor:pointer;text-align:left;width:100%}
+.res:first-of-type{border-top:0}
+.res:active{background:var(--well)}
+.res .rl{color:var(--ink-2);font-weight:600;font-size:13px}
+.res .rv{font-family:var(--font-num);font-size:15px;font-variant-numeric:tabular-nums;text-align:right;overflow-wrap:anywhere;min-width:0}
+.res.main .rv{font-size:22px;font-weight:400}
+.res.main .rl{color:var(--ink)}
+.results.example .rv{color:var(--ink-3)}
+.tip-chips{display:flex;gap:6px;flex-wrap:wrap}
+.tip-chips .chip[aria-pressed="true"]{background:var(--key-op);color:var(--key-op-ink)}
+.stepper{display:flex;gap:6px}
+.stepper .input{text-align:center}
+.stepper .btn{width:44px;height:44px;flex:none;font-size:20px;padding:0}
+.sentence{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:600;font-size:13.5px;color:var(--ink-2)}
+.sentence .input{width:auto;flex:1 1 70px;min-width:70px;height:40px;font-size:15px}
+.sentence-out{width:100%;display:flex;justify-content:flex-end;font-family:var(--font-num);font-size:20px;color:var(--ink);cursor:pointer;border-radius:8px;padding:2px 4px}
+.sentence-out:active{background:var(--well)}
+.sentence-out.example{color:var(--ink-3)}
+.sep{border-top:1px dashed var(--rule)}
+input[type="date"].input{font-family:var(--font-ui);font-size:15px}
+
+/* ---------- sheet, toast ---------- */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:20;animation:fade .15s ease-out}
+@keyframes fade{from{opacity:0}}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--paper);border-radius:20px 20px 0 0;
+  max-height:86%;overflow-y:auto;overscroll-behavior:contain;
+  padding:8px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  box-shadow:0 -8px 30px rgba(0,0,0,.2);animation:up .2s cubic-bezier(.2,.8,.2,1)}
+@media (min-width:640px){ .sheet{left:50%;right:auto;width:440px;transform:translateX(-50%);animation:none} }
+@keyframes up{from{transform:translateY(30px);opacity:.6}}
+.grip{width:36px;height:4px;border-radius:99px;background:var(--rule);margin:2px auto 10px}
+.sheet:focus{outline:none}
+.sheet h2{font-size:16px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+.sheet .sub{font-family:var(--font-num);color:var(--ink-2);font-size:13px;overflow-wrap:anywhere;margin:0 0 10px}
+.sheet .sub b{color:var(--ink);font-weight:500;font-size:18px;display:block;margin-top:2px}
+.menu{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.menu button{width:100%;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 10px;border-radius:11px;font-weight:600;font-size:14.5px;text-align:left}
+.menu button:active{background:var(--well)}
+.menu button svg{width:19px;height:19px;color:var(--ink-3);flex:none}
+.menu button.danger{color:var(--danger)}
+.menu button.danger svg{color:var(--danger)}
+.seg{display:flex;padding:3px;background:var(--well);border-radius:11px;gap:2px}
+.seg button{flex:1;height:34px;border-radius:8px;font-weight:700;font-size:13px;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.set-group{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-top:1px dashed var(--rule)}
+.set-group:first-of-type{border-top:0}
+.howto{margin:0;padding-left:20px;color:var(--ink-2);line-height:1.55;font-size:13px;display:flex;flex-direction:column;gap:6px}
+.howto b{color:var(--ink)}
+.small{font-size:12px;color:var(--ink-3);line-height:1.5;margin:4px 0 0}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom, 0px));z-index:30;
+  background:var(--toast-bg);color:var(--toast-ink);border-radius:12px;padding:8px 8px 8px 14px;display:flex;align-items:center;gap:10px;
+  font-weight:600;font-size:13px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25);animation:toastIn .18s ease-out}
+.toast span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-variant-numeric:tabular-nums}
+.toast button{flex:none;color:var(--accent);font-weight:800;padding:6px 8px;border-radius:8px;letter-spacing:.02em}
+.toast.no-act{padding-right:14px}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%, 8px)}}
+
+@media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" id="tab-calc" data-tab="calc" aria-controls="panel-calc">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M9 7.5h6M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01"/></svg>
+        <span>Calc</span></button>
+      <button class="tab" role="tab" id="tab-convert" data-tab="convert" aria-controls="panel-convert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14l-4-4M20 16H6l4 4"/></svg>
+        <span>Convert</span></button>
+      <button class="tab" role="tab" id="tab-tools" data-tab="tools" aria-controls="panel-tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>
+        <span>Tools</span></button>
+    </div>
+    <button class="icon-btn" id="openSettings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+    </button>
+  </header>
+
+  <!-- ============ CALC ============ -->
+  <section class="panel" id="panel-calc" role="tabpanel" aria-labelledby="tab-calc">
+    <div class="tape-wrap">
+      <div class="tape-head"><span>Tape</span><span id="tapeCount"></span><span class="grow"></span><button class="text-btn" id="tapeClear">Clear</button></div>
+      <ol class="tape" id="tape" aria-label="Calculation history"></ol>
+    </div>
+    <div class="calc-main">
+      <div class="display" id="display">
+        <div class="expr" id="expr" aria-live="polite"></div>
+        <div class="preview" id="preview"></div>
+      </div>
+      <div class="ctl-row">
+        <button class="chip" id="sciToggle" aria-pressed="false" aria-label="Scientific keys">f(x)</button>
+        <button class="chip mono" id="angleToggle" hidden aria-label="Angle unit">DEG</button>
+        <span class="grow"></span>
+        <button class="bksp" id="bksp" aria-label="Delete (hold to clear)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M21 5H9L3 12l6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"/><path d="m11.5 9.5 5 5m0-5-5 5"/></svg>
+        </button>
+      </div>
+      <div class="sci" id="sci" hidden>
+        <button class="k" data-fn="sin(">sin</button>
+        <button class="k" data-fn="cos(">cos</button>
+        <button class="k" data-fn="tan(">tan</button>
+        <button class="k" data-fn="ln(">ln</button>
+        <button class="k" data-fn="log(">log</button>
+        <button class="k" data-fn="√(" aria-label="Square root">√</button>
+        <button class="k" data-act="sq" aria-label="Square"><span>x<sup>2</sup></span></button>
+        <button class="k" data-op="^" aria-label="Power"><span>x<sup>y</sup></span></button>
+        <button class="k" data-post="!" aria-label="Factorial">n!</button>
+        <button class="k" data-const="π" aria-label="Pi">π</button>
+      </div>
+      <div class="keys" id="keys">
+        <button class="k fn clr" data-act="clear" aria-label="Clear">C</button>
+        <button class="k fn" data-act="paren" aria-label="Brackets">( )</button>
+        <button class="k fn" data-post="%" aria-label="Percent">%</button>
+        <button class="k op" data-op="/" aria-label="Divide">÷</button>
+        <button class="k" data-d="7">7</button><button class="k" data-d="8">8</button><button class="k" data-d="9">9</button>
+        <button class="k op" data-op="*" aria-label="Multiply">×</button>
+        <button class="k" data-d="4">4</button><button class="k" data-d="5">5</button><button class="k" data-d="6">6</button>
+        <button class="k op" data-op="-" aria-label="Minus">−</button>
+        <button class="k" data-d="1">1</button><button class="k" data-d="2">2</button><button class="k" data-d="3">3</button>
+        <button class="k op" data-op="+" aria-label="Plus">+</button>
+        <button class="k" data-act="sign" aria-label="Change sign">±</button>
+        <button class="k" data-d="0">0</button>
+        <button class="k" data-act="dot" aria-label="Decimal point">.</button>
+        <button class="k eq" data-act="eq" aria-label="Equals">=</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONVERT ============ -->
+  <section class="panel" id="panel-convert" role="tabpanel" aria-labelledby="tab-convert" hidden>
+    <div class="scroll">
+      <div class="chips" id="convCats" role="tablist" aria-label="Unit type"></div>
+      <div class="card">
+        <div class="field">
+          <label class="label" for="convIn">From</label>
+          <input class="input" id="convIn" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0">
+          <select class="select" id="convFrom" aria-label="From unit"></select>
+        </div>
+        <div class="swap-row"><button class="swap" id="convSwap" aria-label="Swap units">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v16M8 4 4 8M8 4l4 4M16 20V4M16 20l-4-4M16 20l4-4"/></svg>
+        </button></div>
+        <div class="field">
+          <span class="label">To</span>
+          <div class="big-out" id="convOut" role="button" tabindex="0" aria-label="Converted value, tap to copy">0</div>
+          <select class="select" id="convTo" aria-label="To unit"></select>
+        </div>
+        <div class="meta" id="rateLine"></div>
+        <div id="customBox" hidden>
+          <label class="switch"><input type="checkbox" id="customOn"><span>Use my own rate</span></label>
+          <div class="inline-rate" id="customRow"><span id="customFromLbl">1 USD =</span><input class="input" id="customRate" inputmode="decimal" autocomplete="off" placeholder="rate"><span id="customToLbl">NGN</span></div>
+        </div>
+        <div class="row">
+          <button class="btn" id="convCopy"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copy</button>
+          <button class="btn primary" id="convUse">Use in Calc</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="res-head">Quick reference</div>
+        <table class="ref" id="convRef"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TOOLS ============ -->
+  <section class="panel" id="panel-tools" role="tabpanel" aria-labelledby="tab-tools" hidden>
+    <div class="scroll">
+      <div class="chips" id="toolChips" role="tablist" aria-label="Tool">
+        <button class="chip" role="tab" data-tool="tip">Tip &amp; split</button>
+        <button class="chip" role="tab" data-tool="discount">Discount</button>
+        <button class="chip" role="tab" data-tool="percent">Percent</button>
+        <button class="chip" role="tab" data-tool="margin">Profit</button>
+        <button class="chip" role="tab" data-tool="dates">Dates</button>
+      </div>
+
+      <div class="card tool" data-tool="tip">
+        <div class="row">
+          <div class="field"><label class="label" for="t-bill">Bill</label><input class="input" id="t-bill" data-k="bill" data-ph="12500" placeholder="12,500" inputmode="decimal" autocomplete="off"></div>
+          <div class="field"><label class="label" for="t-tip">Tip %</label><input class="input" id="t-tip" data-k="tip" data-ph="10" data-def="0" placeholder="10" inputmode="decimal" autocomplete="off"></div>
+        </div>
+        <div class="tip-chips" id="tipChips">
+          <button class="chip" data-tipv="0">0%</button><button class="chip" data-tipv="5">5%</button><button class="chip" data-tipv="10">10%</button><button class="chip" data-tipv="15">15%</button><button class="chip" data-tipv="20">20%</button>
+        </div>
+        <div class="field"><label class="label" for="t-people">Split between</label>
+          <div class="stepper"><button class="btn" data-step="-1" aria-label="Fewer people">−</button><input class="input" id="t-people" data-k="people" data-ph="3" data-def="1" placeholder="3" inputmode="numeric" autocomplete="off"><button class="btn" data-step="1" aria-label="More people">+</button></div></div>
+        <div class="results" data-out></div>
+      </div>
+
+      <div class="card tool" data-tool="discount" hidden>
+        <div class="row">
+          <div class="field"><label class="label" for="d-price">Price</label><input class="input" id="d-price" data-k="price" data-ph="45000" placeholder="45,000" inputmode="decimal" autocomplete="off"></div>
+          <div class="field"><label class="label" for="d-off">Discount %</label><input class="input" id="d-off" data-k="off" data-ph="15" data-def="0" placeholder="15" inputmode="decimal" autocomplete="off"></div>
+        </div>
+        <div class="field"><label class="label" for="d-tax">Tax / VAT % (optional)</label><input class="input" id="d-tax" data-k="tax" data-ph="7.5" data-def="0" placeholder="7.5" inputmode="decimal" autocomplete="off"></div>
+        <div class="results" data-out></div>
+      </div>
+
+      <div class="card tool" data-tool="percent" hidden>
+        <div class="sentence"><input class="input" id="p-a1" data-k="a1" data-ph="15" placeholder="15" inputmode="decimal" aria-label="Percent"> % of <input class="input" id="p-b1" data-k="b1" data-ph="8250" placeholder="8,250" inputmode="decimal" aria-label="Number"><div class="sentence-out" data-o="1"></div></div>
+        <div class="sep"></div>
+        <div class="sentence"><input class="input" id="p-a2" data-k="a2" data-ph="660" placeholder="660" inputmode="decimal" aria-label="Part"> is what % of <input class="input" id="p-b2" data-k="b2" data-ph="8250" placeholder="8,250" inputmode="decimal" aria-label="Whole"><div class="sentence-out" data-o="2"></div></div>
+        <div class="sep"></div>
+        <div class="sentence">Change from <input class="input" id="p-a3" data-k="a3" data-ph="8700" placeholder="8,700" inputmode="decimal" aria-label="Old value"> to <input class="input" id="p-b3" data-k="b3" data-ph="8910" placeholder="8,910" inputmode="decimal" aria-label="New value"><div class="sentence-out" data-o="3"></div></div>
+      </div>
+
+      <div class="card tool" data-tool="margin" hidden>
+        <div class="row">
+          <div class="field"><label class="label" for="m-cost">Cost</label><input class="input" id="m-cost" data-k="cost" data-ph="8250" placeholder="8,250" inputmode="decimal" autocomplete="off"></div>
+          <div class="field"><label class="label" for="m-price">Selling price</label><input class="input" id="m-price" data-k="price" data-ph="11000" placeholder="11,000" inputmode="decimal" autocomplete="off"></div>
+        </div>
+        <div class="results" data-out></div>
+        <div class="sep"></div>
+        <div class="sentence">Price for a <input class="input" id="m-target" data-k="target" data-ph="30" data-def="30" placeholder="30" inputmode="decimal" aria-label="Target margin"> % margin<div class="sentence-out" data-o="target"></div></div>
+      </div>
+
+      <div class="card tool" data-tool="dates" hidden>
+        <div class="row">
+          <div class="field"><label class="label" for="dt-a">From</label><input class="input" type="date" id="dt-a"></div>
+          <div class="field"><label class="label" for="dt-b">To</label><input class="input" type="date" id="dt-b"></div>
+        </div>
+        <div class="results" data-out></div>
+        <div class="sep"></div>
+        <div class="sentence"><input class="input" type="date" id="dt-c" aria-label="Start date"> plus <input class="input" id="dt-n" data-ph="30" placeholder="30" inputmode="numeric" aria-label="Days"> days<div class="sentence-out" data-o="add"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="sheet" id="sheet" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden><div class="grip"></div><div id="sheetBody"></div></div>
+  <div class="toast" id="toast" role="status" hidden><span id="toastText"></span><button id="toastAct" hidden></button></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('tally:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('tally:' + k, JSON.stringify(v)); } catch (e) {} }
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ================= settings ================= */
+const S = Object.assign({ theme: 'system', haptics: true, sound: false, grouping: true, copyGrouping: false, deg: true, sci: false, tab: 'calc', tool: 'tip' }, store.get('settings', {}));
+const saveS = () => store.set('settings', S);
+
+let themeSetByApp = false;
+function applyTheme() {
+  const r = document.documentElement;
+  if (S.theme === 'light' || S.theme === 'dark') { r.setAttribute('data-theme', S.theme); themeSetByApp = true; }
+  else if (themeSetByApp) { r.removeAttribute('data-theme'); themeSetByApp = false; }
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) requestAnimationFrame(() => { m.content = getComputedStyle(document.body).backgroundColor; });
+}
+
+/* ================= number formatting ================= */
+const NFg = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 15 });
+const NFp = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 15, useGrouping: false });
+function fmt(v, group = S.grouping) {
+  if (Object.is(v, -0)) v = 0;
+  const a = Math.abs(v);
+  if (a !== 0 && (a >= 1e15 || a < 1e-9)) {
+    const [m, e] = v.toExponential(11).split('e');
+    return m.replace(/\.?0+$/, '') + 'E' + Number(e);
+  }
+  return (group ? NFg : NFp).format(v);
+}
+function fmtTo(v, { money = false, group = S.grouping } = {}) {
+  if (!isFinite(v)) return '—';
+  if (Object.is(v, -0) || Math.abs(v) < 1e-12) v = 0;
+  const a = Math.abs(v);
+  if (a >= 1e15) return fmt(v, group);
+  if (money) {
+    if (a >= 1 || a === 0) return new Intl.NumberFormat('en-US', { minimumFractionDigits: (v % 1 === 0 ? 0 : 2), maximumFractionDigits: 2, useGrouping: group }).format(v);
+    return new Intl.NumberFormat('en-US', { maximumSignificantDigits: 4, useGrouping: group }).format(v);
+  }
+  if (a !== 0 && a < 1e-6) return fmt(v, group);
+  return new Intl.NumberFormat('en-US', { maximumSignificantDigits: 9, useGrouping: group }).format(v);
+}
+const showNum = (v, group) => fmt(v, group).replace(/^-/, '\u2212');
+const numHTML = s => esc(s).replace(/,/g, '<span class="cm">,</span>');
+const groupInt = s => s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/* ================= expression engine ================= */
+class CalcError extends Error {}
+const fail = m => { throw new CalcError(m); };
+
+function lex(src) {
+  const out = []; let i = 0;
+  while (i < src.length) {
+    const c = src[i], rest = src.slice(i);
+    if (/[0-9.]/.test(c)) {
+      const m = /^(\d*\.?\d*)(E-?\d+)?/.exec(rest);
+      if (m[1] === '.' || m[1] === '') fail('Invalid format');
+      out.push({ t: 'num', v: parseFloat(m[0].replace('E', 'e')) }); i += m[0].length; continue;
+    }
+    if ('+-*/^%!()'.includes(c)) { out.push({ t: c }); i++; continue; }
+    if (c === 'π') { out.push({ t: 'num', v: Math.PI }); i++; continue; }
+    if (c === 'e') { out.push({ t: 'num', v: Math.E }); i++; continue; }
+    if (c === '√') { out.push({ t: 'fn', v: 'sqrt' }); i++; continue; }
+    const f = /^(sin|cos|tan|ln|log)/.exec(rest);
+    if (f) { out.push({ t: 'fn', v: f[1] }); i += f[1].length; continue; }
+    fail('Invalid format');
+  }
+  return out;
+}
+
+function evaluate(src, deg = true) {
+  let toks = lex(src);
+  // be forgiving: drop dangling operators / openers at the end, close open brackets
+  while (toks.length && ['+', '-', '*', '/', '^', '(', 'fn'].includes(toks[toks.length - 1].t === 'fn' ? 'fn' : toks[toks.length - 1].t)) toks.pop();
+  if (!toks.length) return null;
+  let depth = 0;
+  for (const t of toks) { if (t.t === '(') depth++; else if (t.t === ')') depth--; if (depth < 0) fail('Invalid format'); }
+  while (depth-- > 0) toks.push({ t: ')' });
+
+  let p = 0;
+  const peek = () => toks[p];
+  const expect = t => { const x = toks[p++]; if (!x || x.t !== t) fail('Invalid format'); };
+  const toRad = x => deg ? x * Math.PI / 180 : x;
+  const snap = x => Math.abs(x) < 1e-13 ? 0 : x;
+
+  function expr() {
+    let left = term();
+    while (peek() && (peek().t === '+' || peek().t === '-')) {
+      const op = toks[p++].t; const right = term();
+      const rv = right.pct ? left.v * right.v : right.v;   // 200 + 10% = 220
+      left = { v: op === '+' ? left.v + rv : left.v - rv };
+    }
+    return left;
+  }
+  const startsPrimary = t => t && (t.t === 'num' || t.t === 'fn' || t.t === '(');
+  function term() {
+    let left = unary();
+    for (;;) {
+      const t = peek();
+      if (t && (t.t === '*' || t.t === '/')) {
+        p++; const r = unary();
+        if (t.t === '/') { if (r.v === 0) fail('Can’t divide by 0'); left = { v: left.v / r.v }; }
+        else left = { v: left.v * r.v };
+      } else if (startsPrimary(t)) { const r = unary(); left = { v: left.v * r.v }; }
+      else break;
+    }
+    return left;
+  }
+  function unary() {
+    const t = peek();
+    if (t && (t.t === '-' || t.t === '+')) { p++; const r = unary(); return { v: t.t === '-' ? -r.v : r.v, pct: r.pct }; }
+    return power();
+  }
+  function power() {
+    const base = postfix();
+    if (peek() && peek().t === '^') {
+      p++; const ex = unary(); const v = Math.pow(base.v, ex.v);
+      if (Number.isNaN(v)) fail('Not a real number');
+      return { v };
+    }
+    return base;
+  }
+  function postfix() {
+    let x = primary();
+    while (peek() && (peek().t === '!' || peek().t === '%')) {
+      const t = toks[p++].t;
+      if (t === '%') x = { v: x.v / 100, pct: true };
+      else {
+        if (x.v < 0 || !Number.isInteger(x.v)) fail('n! needs a whole number');
+        if (x.v > 170) fail('Number too large');
+        let f = 1; for (let i = 2; i <= x.v; i++) f *= i; x = { v: f };
+      }
+    }
+    return x;
+  }
+  function primary() {
+    const t = toks[p++];
+    if (!t) fail('Invalid format');
+    if (t.t === 'num') return { v: t.v };
+    if (t.t === '(') { const e = expr(); expect(')'); return { v: e.v }; }
+    if (t.t === 'fn') {
+      expect('('); const e = expr(); expect(')'); const x = e.v; let v;
+      switch (t.v) {
+        case 'sin': v = snap(Math.sin(toRad(x))); break;
+        case 'cos': v = snap(Math.cos(toRad(x))); break;
+        case 'tan': { const c = snap(Math.cos(toRad(x))); if (c === 0) fail('tan is undefined here'); v = snap(Math.tan(toRad(x))); break; }
+        case 'ln': if (x <= 0) fail('ln needs a positive number'); v = Math.log(x); break;
+        case 'log': if (x <= 0) fail('log needs a positive number'); v = Math.log10(x); break;
+        case 'sqrt': if (x < 0) fail('Not a real number'); v = Math.sqrt(x); break;
+      }
+      return { v };
+    }
+    fail('Invalid format');
+  }
+  const r = expr();
+  if (p < toks.length) fail('Invalid format');
+  if (!isFinite(r.v)) fail('Number too large');
+  return r.v;
+}
+// evaluate free-typed text from tool / converter fields
+function evalField(str) {
+  const s = String(str).trim().replace(/,/g, '').replace(/[x×]/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-').replace(/\s+/g, '');
+  if (!s) return null;
+  try { const v = evaluate(s, S.deg); return v == null ? NaN : v; } catch (e) { return NaN; }
+}
+
+/* ================= calculator state ================= */
+const OPS = new Set(['+', '-', '*', '/', '^']);
+const FUNCS = new Set(['sin(', 'cos(', 'tan(', 'ln(', 'log(', '√(']);
+const OPENS = new Set(['(', '(-', ...FUNCS]);
+const isNumChar = t => t !== undefined && t.length === 1 && /[0-9.]/.test(t);
+const isLit = t => t !== undefined && /^[0-9.]+E-?\d+$/.test(t);
+const endsOperand = t => t !== undefined && (isNumChar(t) || isLit(t) || t === ')' || t === 'π' || t === 'e' || t === '!' || t === '%');
+
+let T = Array.isArray(store.get('draft', null)) ? store.get('draft', []) : [];
+let justEval = !!store.get('draftDone', false);
+let errMsg = '';
+
+function trailingNumberStart() { let i = T.length; while (i > 0 && isNumChar(T[i - 1])) i--; return i; }
+function valueTokens(v) {
+  const s = fmt(Math.abs(v), false);
+  const body = s.includes('E') ? [s] : s.split('');
+  return v < 0 ? ['(-', ...body, ')'] : body;
+}
+const last = () => T[T.length - 1];
+const trimDot = () => { if (last() === '.') T.pop(); };
+
+function inDigit(d) {
+  if (justEval) T = [];
+  justEval = false;
+  const l = last();
+  if (l !== undefined && !isNumChar(l) && endsOperand(l)) T.push('*');
+  const st = trailingNumberStart(); const num = T.slice(st).join('');
+  if (num.replace('.', '').length >= 15) { toast('Numbers can be up to 15 digits'); return false; }
+  if (num === '0') { T[T.length - 1] = d; return; }
+  T.push(d);
+}
+function inDot() {
+  if (justEval) T = [];
+  justEval = false;
+  const st = trailingNumberStart(); const num = T.slice(st).join('');
+  if (num.includes('.')) return false;
+  if (num === '') { if (endsOperand(last())) T.push('*'); T.push('0', '.'); return; }
+  T.push('.');
+}
+function inOp(op) {
+  justEval = false;
+  const l = last();
+  if (l === undefined) { if (op === '-') T.push('(-'); else return false; return; }
+  if (OPS.has(l)) {
+    const prev = T[T.length - 2];
+    if (prev === undefined || OPENS.has(prev)) return false;
+    T[T.length - 1] = op; return;
+  }
+  if (OPENS.has(l)) { if (op === '-' && l !== '(-') { T.push('-'); return; } return false; }
+  trimDot();
+  T.push(op);
+}
+function inPost(p) {
+  justEval = false;
+  if (!endsOperand(last())) return false;
+  trimDot(); T.push(p);
+}
+function openCount() { let n = 0; for (const t of T) { if (OPENS.has(t)) n++; else if (t === ')') n--; } return n; }
+function inParen() {
+  justEval = false;
+  const l = last();
+  if (l === undefined || OPS.has(l) || OPENS.has(l)) { T.push('('); return; }
+  trimDot();
+  if (openCount() > 0) { T.push(')'); return; }
+  T.push('*', '(');
+}
+function inFunc(f) {
+  if (justEval) { T = [f, ...valueTokens(lastValue())]; justEval = false; return; }
+  if (endsOperand(last())) { trimDot(); T.push('*'); }
+  T.push(f);
+}
+function inConst(c) {
+  if (justEval) T = [];
+  justEval = false;
+  if (endsOperand(last())) { trimDot(); T.push('*'); }
+  T.push(c);
+}
+function inSquare() {
+  justEval = false;
+  if (!endsOperand(last())) return false;
+  trimDot(); T.push('^', '2');
+}
+function matchOpen(endIdx) { // index of the opener that matches the ')' at endIdx
+  let depth = 0;
+  for (let j = endIdx; j >= 0; j--) {
+    if (T[j] === ')') depth++;
+    else if (OPENS.has(T[j])) { depth--; if (depth === 0) return j; }
+  }
+  return -1;
+}
+function inSign() {
+  justEval = false;
+  const l = last();
+  if (l === ')') {
+    const j = matchOpen(T.length - 1);
+    if (j >= 0 && T[j] === '(-') { T.splice(T.length - 1, 1); T.splice(j, 1); return; }
+    if (j >= 0) { T.splice(j, 0, '(-'); T.push(')'); return; }
+    return false;
+  }
+  let s = trailingNumberStart();
+  if (s === T.length && isLit(l)) s = T.length - 1;
+  if (s < T.length) {
+    if (T[s - 1] === '(-') T.splice(s - 1, 1); else T.splice(s, 0, '(-');
+    return;
+  }
+  if (l === '(-') { T.pop(); return; }
+  if (endsOperand(l)) T.push('*');
+  T.push('(-');
+}
+function inBack() {
+  if (errMsg) errMsg = '';
+  justEval = false;
+  if (!T.length) return false;
+  T.pop();
+}
+function inClear() { T = []; errMsg = ''; justEval = false; }
+const lastValue = () => { try { return evaluate(T.join(''), S.deg) ?? 0; } catch (e) { return 0; } };
+
+function inEquals() {
+  if (!T.length) return false;
+  const raw = T.join('');
+  let r;
+  try { r = evaluate(raw, S.deg); } catch (e) { if (e instanceof CalcError) { errMsg = e.message; buzz(40); return; } throw e; }
+  if (r == null) return false;
+  const trivial = /^(\(-)?[0-9.]+(E-?\d+)?\)?$/.test(raw);
+  if (!trivial) addHistory(T.slice(), r);
+  T = valueTokens(r); justEval = true; errMsg = '';
+  return 'eq';
+}
+function insertValue(v) {
+  const vt = valueTokens(v);
+  if (justEval || !T.length) T = vt;
+  else { if (endsOperand(last())) { trimDot(); T.push('*'); } T.push(...vt); }
+  justEval = false; errMsg = '';
+  render();
+}
+
+/* ================= rendering ================= */
+const exprEl = $('#expr'), prevEl = $('#preview');
+function pretty(raw, html = true) {
+  let s = '', i = 0;
+  while (i < raw.length) {
+    const m = /^(\d+)(\.\d*)?|^\.\d*/.exec(raw.slice(i));
+    if (m && m[0]) {
+      let txt = m[0];
+      if (m[1] && S.grouping) txt = groupInt(m[1]) + (m[2] || '');
+      s += html ? numHTML(txt) : txt; i += m[0].length; continue;
+    }
+    const c = raw[i];
+    const sym = { '*': '×', '/': '÷', '-': '−', '+': '+', '^': '^' }[c];
+    if (sym) s += html ? `<span class="op">${sym}</span>` : sym;
+    else s += esc(c);
+    i++;
+  }
+  return s;
+}
+function fitExpr() {
+  const el = exprEl, w = el.clientWidth; if (!w) return;
+  const max = Math.round(Math.min(56, Math.max(28, w * 0.16)));
+  const min = 20;
+  el.classList.remove('wrap');
+  let size = max; el.style.fontSize = size + 'px';
+  while (el.scrollWidth > w + 1 && size > min) { size -= 2; el.style.fontSize = size + 'px'; }
+  if (el.scrollWidth > w + 1) { el.classList.add('wrap'); el.scrollTop = el.scrollHeight; }
+}
+function render(anim) {
+  exprEl.innerHTML = T.length ? pretty(T.join('')) : '<span class="zero">0</span>';
+  exprEl.classList.toggle('done', justEval);
+  if (anim === 'eq') { exprEl.classList.remove('pop'); void exprEl.offsetWidth; exprEl.classList.add('pop'); }
+  prevEl.classList.toggle('err', !!errMsg);
+  if (errMsg) prevEl.textContent = errMsg;
+  else if (!justEval && T.length && !OPS.has(last()) && !OPENS.has(last()) && !/^(\(-)?[0-9.]+(E-?\d+)?\)?$/.test(T.join(''))) {
+    let txt = '';
+    try { const r = evaluate(T.join(''), S.deg); if (r != null) txt = '= ' + numHTML(showNum(r)); } catch (e) {}
+    prevEl.innerHTML = txt;
+  } else prevEl.textContent = '';
+  fitExpr();
+  store.set('draft', T); store.set('draftDone', justEval);
+}
+
+/* ================= history / tape ================= */
+let H = store.get('history', null);
+if (!Array.isArray(H)) {
+  // first run: carry over the calculations from the old Calculator Panel
+  const old = ['8910*1300', '165*50', '8250+660', '8910*1300', '8900-160', '8700*1380', '125*130'];
+  const now = Date.now();
+  H = old.map((e, i) => ({ id: 'imp' + i, tokens: e.split(''), value: evaluate(e), t: now - (old.length - i) * 60000, imported: true }));
+  store.set('history', H);
+}
+const tapeEl = $('#tape');
+function saveH() { store.set('history', H); }
+function addHistory(tokens, value) {
+  H.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), tokens, value, t: Date.now() });
+  if (H.length > 400) H = H.slice(-400);
+  saveH(); renderTape(true);
+}
+function dayLabel(t) {
+  const d = new Date(t), today = new Date();
+  const k = x => x.toDateString();
+  if (k(d) === k(today)) return 'Today';
+  const y = new Date(today); y.setDate(today.getDate() - 1);
+  if (k(d) === k(y)) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+}
+const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
+function renderTape(scroll) {
+  $('#tapeCount').textContent = H.length ? '· ' + H.length : '';
+  $('#tapeClear').hidden = !H.length;
+  if (!H.length) {
+    tapeEl.innerHTML = '<li class="tape-empty">Finished calculations print here. Tap one to reuse its result, hold it to label, edit or delete.</li>';
+    return;
+  }
+  let html = '', lastDay = '';
+  for (const h of H) {
+    const day = h.imported ? 'From your old panel' : dayLabel(h.t);
+    if (day !== lastDay) { html += `<li class="day">${esc(day)}</li>`; lastDay = day; }
+    html += `<li class="entry" data-id="${esc(h.id)}"><button class="copy" aria-label="Copy ${esc(fmt(h.value))}">${ICON_COPY}</button>` +
+      `<div class="entry-body" role="button" tabindex="0" aria-label="Use ${esc(fmt(h.value))}">` +
+      (h.label ? `<span class="e-tag">${esc(h.label)}</span>` : '') +
+      `<div class="e-expr">${pretty(h.tokens.join(''))}</div><div class="e-res"><span class="eq">=</span> ${numHTML(showNum(h.value))}</div></div></li>`;
+  }
+  tapeEl.innerHTML = html;
+  if (scroll !== false) tapeEl.scrollTop = tapeEl.scrollHeight;
+}
+const findH = id => H.find(h => h.id === id);
+
+let lp = null;
+tapeEl.addEventListener('pointerdown', e => {
+  const body = e.target.closest('.entry-body'); if (!body) return;
+  body.classList.add('pressing');
+  lp = { body, x: e.clientX, y: e.clientY, fired: false };
+  lp.timer = setTimeout(() => { if (!lp) return; lp.fired = true; body.classList.remove('pressing'); buzz(18); openEntrySheet(body.parentElement.dataset.id); }, 480);
+});
+const endLP = () => { if (lp) { clearTimeout(lp.timer); lp.body.classList.remove('pressing'); } };
+tapeEl.addEventListener('pointermove', e => { if (lp && !lp.fired && (Math.abs(e.clientX - lp.x) > 8 || Math.abs(e.clientY - lp.y) > 8)) { endLP(); lp = null; } });
+tapeEl.addEventListener('pointerup', endLP);
+tapeEl.addEventListener('pointercancel', () => { endLP(); lp = null; });
+tapeEl.addEventListener('contextmenu', e => {
+  const body = e.target.closest('.entry-body'); if (!body) return;
+  e.preventDefault();
+  if (lp && lp.fired) return;
+  endLP(); lp = { fired: true, body };
+  openEntrySheet(body.parentElement.dataset.id);
+});
+tapeEl.addEventListener('click', e => {
+  const copyBtn = e.target.closest('.copy');
+  const li = e.target.closest('.entry'); if (!li) return;
+  const h = findH(li.dataset.id); if (!h) return;
+  if (copyBtn) { copyValue(h.value); return; }
+  if (lp && lp.fired) { lp = null; return; }
+  lp = null;
+  insertValue(h.value); tick();
+});
+tapeEl.addEventListener('keydown', e => {
+  const body = e.target.closest('.entry-body'); if (!body) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const h = findH(body.parentElement.dataset.id); if (h) insertValue(h.value); }
+});
+$('#tapeClear').addEventListener('click', () => clearTape());
+function clearTape() {
+  if (!H.length) return;
+  const backup = H; H = []; saveH(); renderTape();
+  toast(`Cleared ${backup.length} ${backup.length === 1 ? 'entry' : 'entries'}`, 'Undo', () => { H = backup; saveH(); renderTape(); });
+}
+
+/* ================= sheet ================= */
+const sheet = $('#sheet'), scrim = $('#scrim'), sheetBody = $('#sheetBody');
+let sheetReturn = null;
+function openSheet(html, onMount) {
+  sheetReturn = document.activeElement;
+  sheetBody.innerHTML = html; sheet.hidden = false; scrim.hidden = false;
+  onMount && onMount(sheetBody);
+  const f = sheetBody.querySelector('input:not([type="checkbox"])');
+  (f || sheet).focus({ preventScroll: true });
+}
+function closeSheet() { sheet.hidden = true; scrim.hidden = true; sheetBody.innerHTML = ''; sheetReturn && sheetReturn.focus && sheetReturn.focus({ preventScroll: true }); }
+scrim.addEventListener('click', closeSheet);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) { e.preventDefault(); closeSheet(); } });
+
+const ICON = {
+  use: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7 7 7-7"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/></svg>',
+  copy: ICON_COPY.replace('stroke-width="1.8"', 'stroke-width="2"'),
+  tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8L3 12Z"/><circle cx="7.5" cy="8.5" r="1.3"/></svg>',
+  del: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>'
+};
+function openEntrySheet(id) {
+  const h = findH(id); if (!h) return;
+  openSheet(`<h2 id="sheetTitle">${h.label ? esc(h.label) : 'Calculation'}</h2>
+    <p class="sub">${pretty(h.tokens.join(''))}<b>= ${numHTML(showNum(h.value))}</b></p>
+    <ul class="menu">
+      <li><button data-a="use">${ICON.use}Use result</button></li>
+      <li><button data-a="edit">${ICON.edit}Edit calculation</button></li>
+      <li><button data-a="copy">${ICON.copy}Copy result</button></li>
+      <li><button data-a="copyx">${ICON.copy}Copy calculation</button></li>
+      <li><button data-a="label">${ICON.tag}${h.label ? 'Rename label' : 'Add a label'}</button></li>
+      <li><button data-a="del" class="danger">${ICON.del}Delete</button></li>
+    </ul>`, body => {
+    body.querySelector('.menu').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      const a = b.dataset.a;
+      if (a === 'use') { closeSheet(); insertValue(h.value); }
+      else if (a === 'edit') { closeSheet(); T = h.tokens.slice(); justEval = false; errMsg = ''; render(); }
+      else if (a === 'copy') { copyValue(h.value); closeSheet(); }
+      else if (a === 'copyx') { copyText(pretty(h.tokens.join(''), false) + ' = ' + fmt(h.value), 'calculation'); closeSheet(); }
+      else if (a === 'del') {
+        const i = H.indexOf(h); H.splice(i, 1); saveH(); renderTape(false); closeSheet();
+        toast('Deleted', 'Undo', () => { H.splice(i, 0, h); saveH(); renderTape(false); });
+      }
+      else if (a === 'label') labelSheet(h);
+    });
+  });
+}
+function labelSheet(h) {
+  openSheet(`<h2 id="sheetTitle">Label this calculation</h2>
+    <p class="sub">${pretty(h.tokens.join(''), false)} = ${esc(fmt(h.value))}</p>
+    <form id="labelForm" style="display:flex;flex-direction:column;gap:10px">
+      <input class="input" id="labelInput" maxlength="40" placeholder="e.g. Laptop in naira" value="${esc(h.label || '')}" autocomplete="off" style="font-family:var(--font-ui)">
+      <div class="row"><button type="button" class="btn" id="labelRemove">${h.label ? 'Remove label' : 'Cancel'}</button><button class="btn primary" type="submit">Save</button></div>
+    </form>`, body => {
+    const inp = body.querySelector('#labelInput');
+    setTimeout(() => inp.focus(), 50);
+    body.querySelector('#labelForm').addEventListener('submit', e => { e.preventDefault(); h.label = inp.value.trim() || undefined; saveH(); renderTape(false); closeSheet(); });
+    body.querySelector('#labelRemove').addEventListener('click', () => { if (h.label) { h.label = undefined; saveH(); renderTape(false); } closeSheet(); });
+  });
+}
+
+/* ================= toast, clipboard, feedback ================= */
+const toastEl = $('#toast'), toastText = $('#toastText'), toastAct = $('#toastAct');
+let toastTimer, toastFn;
+function toast(msg, act, fn) {
+  toastText.textContent = msg;
+  toastAct.hidden = !act; toastAct.textContent = act || ''; toastFn = fn;
+  toastEl.classList.toggle('no-act', !act);
+  toastEl.hidden = false;
+  toastEl.style.animation = 'none'; void toastEl.offsetWidth; toastEl.style.animation = '';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { toastEl.hidden = true; }, act ? 4200 : 2200);
+}
+toastAct.addEventListener('click', () => { toastEl.hidden = true; toastFn && toastFn(); });
+
+function copyText(text, what) {
+  const done = () => toast(what ? `Copied ${what}` : `Copied ${text}`);
+  const fallback = () => {
+    try {
+      const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;opacity:0;left:0;top:0'; document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy'); ta.remove(); ok ? done() : toast('Copy isn’t allowed here');
+    } catch (e) { toast('Copy isn’t allowed here'); }
+  };
+  try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+}
+function copyValue(v, opts) {
+  const text = fmt(v, S.copyGrouping);
+  copyText(text);
+  if (opts && opts.offerUse) setTimeout(() => toast(`Copied ${text}`, 'Use in Calc', () => { goTab('calc'); insertValue(v); }), 0);
+}
+function buzz(ms = 8) { if (!S.haptics) return; try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+let actx;
+function tick() {
+  buzz();
+  if (!S.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.type = 'triangle'; o.frequency.setValueAtTime(1500, t); o.frequency.exponentialRampToValueAtTime(700, t + 0.03);
+    g.gain.setValueAtTime(0.09, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + 0.045);
+  } catch (e) {}
+}
+
+/* ================= keypad wiring ================= */
+function press(btn) {
+  const d = btn.dataset;
+  let res;
+  if (d.d) res = inDigit(d.d);
+  else if (d.op) res = inOp(d.op);
+  else if (d.post) res = inPost(d.post);
+  else if (d.fn) res = inFunc(d.fn);
+  else if (d.const) res = inConst(d.const);
+  else switch (d.act) {
+    case 'clear': res = inClear(); break;
+    case 'paren': res = inParen(); break;
+    case 'sign': res = inSign(); break;
+    case 'dot': res = inDot(); break;
+    case 'sq': res = inSquare(); break;
+    case 'eq': res = inEquals(); break;
+  }
+  if (d.act !== 'eq' && errMsg && res !== false) errMsg = '';
+  render(res);
+}
+$('#panel-calc').addEventListener('click', e => {
+  const k = e.target.closest('.keys .k, .sci .k'); if (!k) return;
+  press(k);
+});
+$('#panel-calc').addEventListener('pointerdown', e => { if (e.target.closest('.k, .bksp')) tick(); });
+
+// backspace: tap deletes, hold clears
+const bk = $('#bksp'); let bkTimer, bkHeld = false;
+bk.addEventListener('pointerdown', () => { bkHeld = false; bkTimer = setTimeout(() => { bkHeld = true; inClear(); render(); buzz(25); }, 520); });
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => bk.addEventListener(ev, () => clearTimeout(bkTimer)));
+bk.addEventListener('click', () => { if (bkHeld) { bkHeld = false; return; } inBack(); render(); });
+bk.addEventListener('contextmenu', e => e.preventDefault());
+
+// swipe across the display to delete the last character
+const disp = $('#display'); let sw = null;
+disp.addEventListener('pointerdown', e => { sw = { x: e.clientX, y: e.clientY, done: false }; });
+disp.addEventListener('pointermove', e => {
+  if (!sw || sw.done) return;
+  if (Math.abs(e.clientX - sw.x) > 36 && Math.abs(e.clientY - sw.y) < 30) { sw.done = true; inBack(); render(); tick(); }
+});
+disp.addEventListener('pointerup', () => { sw = null; });
+// tap the live result to copy it
+prevEl.addEventListener('click', () => {
+  if (errMsg || !prevEl.textContent) return;
+  try { const r = evaluate(T.join(''), S.deg); if (r != null) copyValue(r); } catch (e) {}
+});
+exprEl.addEventListener('click', () => { if (justEval && T.length) copyValue(lastValue()); });
+
+// scientific + angle
+const sciEl = $('#sci'), sciBtn = $('#sciToggle'), angBtn = $('#angleToggle');
+function renderSci() {
+  sciEl.hidden = !S.sci; angBtn.hidden = !S.sci;
+  sciBtn.setAttribute('aria-pressed', S.sci);
+  angBtn.textContent = S.deg ? 'DEG' : 'RAD';
+  requestAnimationFrame(fitExpr);
+}
+sciBtn.addEventListener('click', () => { S.sci = !S.sci; saveS(); renderSci(); });
+angBtn.addEventListener('click', () => { S.deg = !S.deg; saveS(); renderSci(); render(); toast(S.deg ? 'Angles in degrees' : 'Angles in radians'); });
+
+// hardware keyboard (DeX, tablets, desktop)
+document.addEventListener('keydown', e => {
+  if (S.tab !== 'calc' || !sheet.hidden) return;
+  if (e.target.closest && e.target.closest('input, select, textarea')) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key; let sel = null;
+  if (/^[0-9]$/.test(k)) sel = `[data-d="${k}"]`;
+  else if (k === '.' || k === ',') sel = '[data-act="dot"]';
+  else if (k === '+') sel = '[data-op="+"]';
+  else if (k === '-') sel = '[data-op="-"]';
+  else if (k === '*' || k === 'x' || k === 'X') sel = '[data-op="*"]';
+  else if (k === '/') sel = '[data-op="/"]';
+  else if (k === '^') sel = '[data-op="^"]';
+  else if (k === '%') sel = '[data-post="%"]';
+  else if (k === '!') sel = '[data-post="!"]';
+  else if (k === '(' ) { e.preventDefault(); inParen(); render(); return; }
+  else if (k === ')') { e.preventDefault(); if (openCount() > 0 && endsOperand(last())) { trimDot(); T.push(')'); justEval = false; } render(); return; }
+  else if (k === 'Enter' || k === '=') sel = '[data-act="eq"]';
+  else if (k === 'Backspace') { e.preventDefault(); inBack(); render(); return; }
+  else if (k === 'Escape' || k === 'Delete') sel = '[data-act="clear"]';
+  if (!sel) return;
+  const btn = $('#keys ' + sel) || $('#sci ' + sel); if (!btn) return;
+  e.preventDefault(); btn.classList.add('down'); setTimeout(() => btn.classList.remove('down'), 90); press(btn);
+});
+
+/* ================= tabs ================= */
+function goTab(t) {
+  S.tab = t; saveS();
+  for (const b of $$('.tab')) b.setAttribute('aria-selected', b.dataset.tab === t);
+  for (const p of $$('.panel')) p.hidden = p.id !== 'panel-' + t;
+  if (t === 'calc') requestAnimationFrame(() => { fitExpr(); });
+  if (t === 'convert') { renderConvert(); if (C.cat === 'currency') loadRates(); }
+  if (t === 'tools') renderTools();
+}
+$$('.tab').forEach(b => b.addEventListener('click', () => goTab(b.dataset.tab)));
+
+/* ================= converter ================= */
+const UNITS = {
+  length: { name: 'Length', units: [['mm', 'Millimetres', 1e-3], ['cm', 'Centimetres', 1e-2], ['m', 'Metres', 1], ['km', 'Kilometres', 1e3], ['in', 'Inches', .0254], ['ft', 'Feet', .3048], ['yd', 'Yards', .9144], ['mi', 'Miles', 1609.344], ['nmi', 'Nautical miles', 1852]], def: ['m', 'ft'] },
+  weight: { name: 'Weight', units: [['mg', 'Milligrams', 1e-6], ['g', 'Grams', 1e-3], ['kg', 'Kilograms', 1], ['t', 'Tonnes', 1e3], ['oz', 'Ounces', .028349523125], ['lb', 'Pounds', .45359237], ['st', 'Stone', 6.35029318]], def: ['kg', 'lb'] },
+  temp: { name: 'Temperature', units: [['C', '°C Celsius'], ['F', '°F Fahrenheit'], ['K', 'K Kelvin']], def: ['C', 'F'] },
+  area: { name: 'Area', units: [['cm2', 'cm²', 1e-4], ['m2', 'm²', 1], ['ha', 'Hectares', 1e4], ['km2', 'km²', 1e6], ['in2', 'in²', .00064516], ['ft2', 'ft²', .09290304], ['yd2', 'yd²', .83612736], ['ac', 'Acres', 4046.8564224]], def: ['m2', 'ft2'] },
+  volume: { name: 'Volume', units: [['ml', 'Millilitres', 1e-3], ['l', 'Litres', 1], ['m3', 'm³', 1e3], ['tsp', 'Teaspoons (US)', .00492892159375], ['tbsp', 'Tablespoons (US)', .01478676478125], ['floz', 'Fluid oz (US)', .0295735295625], ['cup', 'Cups (US)', .2365882365], ['pt', 'Pints (US)', .473176473], ['gal', 'Gallons (US)', 3.785411784], ['galuk', 'Gallons (UK)', 4.54609]], def: ['l', 'gal'] },
+  speed: { name: 'Speed', units: [['ms', 'm/s', 1], ['kmh', 'km/h', 1 / 3.6], ['mph', 'mph', .44704], ['kn', 'Knots', 1852 / 3600], ['fts', 'ft/s', .3048]], def: ['kmh', 'mph'] },
+  data: { name: 'Data', units: [['bit', 'Bits', .125], ['B', 'Bytes', 1], ['KB', 'KB', 1e3], ['MB', 'MB', 1e6], ['GB', 'GB', 1e9], ['TB', 'TB', 1e12], ['KiB', 'KiB', 1024], ['MiB', 'MiB', 1048576], ['GiB', 'GiB', 1073741824]], def: ['GB', 'MB'] },
+  time: { name: 'Time', units: [['ms', 'Milliseconds', 1e-3], ['s', 'Seconds', 1], ['min', 'Minutes', 60], ['h', 'Hours', 3600], ['d', 'Days', 86400], ['wk', 'Weeks', 604800], ['yr', 'Years', 31557600]], def: ['h', 'min'] }
+};
+const CATS = [['currency', 'Currency'], ...Object.entries(UNITS).map(([k, v]) => [k, v.name])];
+const REGION_CUR = { NG: 'NGN', GH: 'GHS', KE: 'KES', ZA: 'ZAR', EG: 'EGP', MA: 'MAD', GB: 'GBP', US: 'USD', CA: 'CAD', AU: 'AUD', NZ: 'NZD', IN: 'INR', PK: 'PKR', BD: 'BDT', JP: 'JPY', CN: 'CNY', KR: 'KRW', SG: 'SGD', MY: 'MYR', PH: 'PHP', ID: 'IDR', AE: 'AED', SA: 'SAR', TR: 'TRY', BR: 'BRL', MX: 'MXN', CH: 'CHF', SE: 'SEK', NO: 'NOK', DK: 'DKK', PL: 'PLN', DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', NL: 'EUR', IE: 'EUR', PT: 'EUR', BE: 'EUR', AT: 'EUR', FI: 'EUR', GR: 'EUR' };
+const BASE_CODES = ['USD', 'EUR', 'GBP', 'NGN', 'GHS', 'KES', 'ZAR', 'EGP', 'XOF', 'XAF', 'CAD', 'AUD', 'NZD', 'CHF', 'JPY', 'CNY', 'INR', 'AED', 'SAR', 'TRY', 'BRL', 'MXN', 'SGD', 'HKD', 'KRW', 'SEK', 'NOK', 'DKK', 'PLN'];
+function homeCurrency() {
+  try { const reg = new Intl.Locale(navigator.language).maximize().region; return REGION_CUR[reg] || 'EUR'; } catch (e) { return 'EUR'; }
+}
+let curNames; try { curNames = new Intl.DisplayNames(['en'], { type: 'currency' }); } catch (e) { curNames = null; }
+const curName = c => { try { return curNames ? curNames.of(c) : c; } catch (e) { return c; } };
+
+const home = homeCurrency();
+const C = Object.assign({ cat: 'currency', input: '100', pairs: { currency: ['USD', home === 'USD' ? 'EUR' : home] }, custom: {}, useCustom: {} }, store.get('convert', {}));
+Object.entries(UNITS).forEach(([k, v]) => { if (!C.pairs[k]) C.pairs[k] = v.def.slice(); });
+const saveC = () => store.set('convert', C);
+
+let rates = store.get('rates', null), ratesState = rates ? 'ok' : 'idle';
+async function loadRates(force) {
+  if (ratesState === 'loading') return;
+  if (!force && rates && Date.now() - rates.fetched < 6 * 3600e3) return;
+  ratesState = 'loading'; renderConvert();
+  try {
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 9000);
+    const r = await fetch('https://open.er-api.com/v6/latest/USD', { signal: ctl.signal }); clearTimeout(to);
+    const j = await r.json();
+    if (j.result !== 'success' || !j.rates) throw new Error('bad');
+    rates = { fetched: Date.now(), updated: j.time_last_update_unix * 1000, rates: j.rates };
+    store.set('rates', rates); ratesState = 'ok';
+  } catch (e) { ratesState = rates ? 'stale' : 'error'; }
+  renderConvert();
+}
+
+const convIn = $('#convIn'), convFrom = $('#convFrom'), convTo = $('#convTo'), convOut = $('#convOut');
+const pairKey = () => C.pairs.currency.join('>');
+function customRate() {
+  const [a, b] = C.pairs.currency;
+  if (C.custom[a + '>' + b]) return C.custom[a + '>' + b];
+  if (C.custom[b + '>' + a]) return 1 / C.custom[b + '>' + a];
+  return null;
+}
+function liveRate(a, b) { if (!rates || !rates.rates[a] || !rates.rates[b]) return null; return rates.rates[b] / rates.rates[a]; }
+function usingCustom() { const [a, b] = C.pairs.currency; return !!(C.useCustom[a + '>' + b] || C.useCustom[b + '>' + a]) && customRate() != null; }
+function convertValue(x, cat = C.cat) {
+  const [a, b] = C.pairs[cat];
+  if (cat === 'currency') {
+    const r = usingCustom() ? customRate() : liveRate(a, b);
+    return r == null ? null : x * r;
+  }
+  if (cat === 'temp') {
+    const c = a === 'C' ? x : a === 'F' ? (x - 32) * 5 / 9 : x - 273.15;
+    return b === 'C' ? c : b === 'F' ? c * 9 / 5 + 32 : c + 273.15;
+  }
+  const f = Object.fromEntries(UNITS[cat].units.map(u => [u[0], u[2]]));
+  return x * f[a] / f[b];
+}
+function unitShort(cat, id) {
+  if (cat === 'currency') return id;
+  if (cat === 'temp') return { C: '°C', F: '°F', K: 'K' }[id];
+  const u = UNITS[cat].units.find(u => u[0] === id); return /[²³\/]/.test(u[1]) || u[1].length <= 4 ? u[1] : id;
+}
+function fillSelect(sel, cat, val) {
+  let opts;
+  if (cat === 'currency') {
+    const codes = rates ? Object.keys(rates.rates).sort() : BASE_CODES.slice().sort();
+    for (const c of C.pairs.currency) if (!codes.includes(c)) codes.push(c);
+    opts = codes.map(c => `<option value="${c}">${c} · ${esc(curName(c))}</option>`).join('');
+  } else opts = UNITS[cat].units.map(u => `<option value="${u[0]}">${esc(u[1])}</option>`).join('');
+  if (sel.dataset.cat !== cat || sel.options.length !== (opts.match(/<option/g) || []).length) { sel.innerHTML = opts; sel.dataset.cat = cat; }
+  sel.value = val;
+}
+let convLast = null;
+function renderCats() {
+  const el = $('#convCats');
+  if (!el.children.length) el.innerHTML = CATS.map(([k, n]) => `<button class="chip" role="tab" data-cat="${k}">${n}</button>`).join('');
+  for (const b of el.children) b.setAttribute('aria-selected', b.dataset.cat === C.cat);
+}
+function renderConvert() {
+  const cat = C.cat;
+  renderCats();
+  fillSelect(convFrom, cat, C.pairs[cat][0]); fillSelect(convTo, cat, C.pairs[cat][1]);
+  if (document.activeElement !== convIn) convIn.value = C.input;
+  const x = evalField(C.input);
+  convIn.classList.toggle('bad', Number.isNaN(x));
+  const money = cat === 'currency';
+  const [a, b] = C.pairs[cat];
+  const y = x == null || Number.isNaN(x) ? null : convertValue(x);
+  convLast = y;
+  convOut.innerHTML = y == null ? '—' : numHTML(fmtTo(y, { money }));
+  // currency meta
+  const box = $('#customBox'), line = $('#rateLine');
+  box.hidden = !money;
+  if (money) {
+    const r = usingCustom() ? customRate() : liveRate(a, b);
+    let status;
+    if (usingCustom()) status = '<b>Your rate</b>';
+    else if (ratesState === 'loading' && !rates) status = 'Loading live rates…';
+    else if (rates) status = `Live rate · updated ${new Date(rates.updated).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}` + (ratesState === 'stale' ? ' · offline' : '');
+    else status = 'Live rates couldn’t load. Turn on your own rate below.';
+    line.innerHTML = (r != null ? `<b>1 ${a} = ${esc(fmtTo(r, { money: true }))} ${b}</b> · ` : '') + status +
+      (!usingCustom() ? ` <button class="text-btn" id="rateRefresh">${ratesState === 'loading' ? 'Loading…' : 'Refresh'}</button>` : '');
+    const k = pairKey();
+    $('#customOn').checked = usingCustom() || !!C.useCustom[k];
+    $('#customRow').hidden = !$('#customOn').checked;
+    $('#customFromLbl').textContent = `1 ${a} =`; $('#customToLbl').textContent = b;
+    if (document.activeElement !== $('#customRate')) { const cr = customRate(); $('#customRate').value = cr ? fmtTo(cr, { money: true, group: false }) : ''; }
+  } else {
+    let r = cat === 'temp' ? null : convertValue(1);
+    line.innerHTML = r != null ? `<b>1 ${esc(unitShort(cat, a))} = ${esc(fmtTo(r))} ${esc(unitShort(cat, b))}</b>` : `<b>${esc(unitShort(cat, a))} → ${esc(unitShort(cat, b))}</b>`;
+  }
+  // quick reference
+  const amounts = cat === 'temp' ? [-10, 0, 10, 20, 25, 30, 37, 100] : money ? [1, 5, 10, 50, 100, 500, 1000, 5000] : [1, 2, 5, 10, 20, 50, 100, 1000];
+  $('#convRef').innerHTML = amounts.map(n => {
+    const v = convertValue(n);
+    return `<tr data-v="${v == null ? '' : v}"><td>${numHTML(fmtTo(n, { money }))} ${esc(unitShort(cat, a))}</td><td>${v == null ? '—' : numHTML(fmtTo(v, { money })) + ' ' + esc(unitShort(cat, b))}</td></tr>`;
+  }).join('');
+}
+$('#convCats').addEventListener('click', e => {
+  const b = e.target.closest('[data-cat]'); if (!b) return;
+  C.cat = b.dataset.cat; saveC(); renderConvert();
+  try { b.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) {}
+  if (C.cat === 'currency') loadRates();
+});
+convIn.addEventListener('input', () => { C.input = convIn.value; saveC(); renderConvert(); });
+convFrom.addEventListener('change', () => { C.pairs[C.cat][0] = convFrom.value; saveC(); renderConvert(); });
+convTo.addEventListener('change', () => { C.pairs[C.cat][1] = convTo.value; saveC(); renderConvert(); });
+$('#convSwap').addEventListener('click', () => { C.pairs[C.cat].reverse(); saveC(); renderConvert(); tick(); });
+$('#rateLine').addEventListener('click', e => { if (e.target.id === 'rateRefresh') loadRates(true); });
+$('#customOn').addEventListener('change', e => {
+  const k = pairKey(), [a, b] = C.pairs.currency;
+  C.useCustom[k] = e.target.checked; if (!e.target.checked) C.useCustom[b + '>' + a] = false;
+  if (e.target.checked && customRate() == null) { const lr = liveRate(a, b); if (lr) C.custom[k] = +lr.toPrecision(6); }
+  saveC(); renderConvert();
+  if (e.target.checked) setTimeout(() => $('#customRate').focus(), 30);
+});
+$('#customRate').addEventListener('input', e => {
+  const v = evalField(e.target.value), k = pairKey(), [a, b] = C.pairs.currency;
+  e.target.classList.toggle('bad', !(v > 0) && e.target.value.trim() !== '');
+  if (v > 0) { C.custom[k] = v; delete C.custom[b + '>' + a]; C.useCustom[k] = true; saveC(); renderConvert(); }
+});
+const convCopy = () => { if (convLast != null) copyValue(+fmtTo(convLast, { money: C.cat === 'currency', group: false })); };
+convOut.addEventListener('click', convCopy);
+convOut.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); convCopy(); } });
+$('#convCopy').addEventListener('click', convCopy);
+$('#convUse').addEventListener('click', () => { if (convLast == null) return; goTab('calc'); insertValue(+fmtTo(convLast, { money: C.cat === 'currency', group: false })); });
+$('#convRef').addEventListener('click', e => { const tr = e.target.closest('tr'); if (tr && tr.dataset.v !== '') copyValue(+fmtTo(+tr.dataset.v, { money: C.cat === 'currency', group: false }), { offerUse: true }); });
+
+/* ================= tools ================= */
+const TV = store.get('tools', {});
+function toolVals(card) {
+  const inputs = $$('input[data-k]', card).filter(i => i.type !== 'date');
+  const empty = inputs.every(i => !i.value.trim());
+  const v = {}; let bad = false;
+  for (const i of inputs) {
+    let x;
+    if (!i.value.trim()) x = empty ? +i.dataset.ph : (i.dataset.def != null ? +i.dataset.def : NaN);
+    else { x = evalField(i.value); i.classList.toggle('bad', Number.isNaN(x)); }
+    if (!i.value.trim()) i.classList.remove('bad');
+    if (Number.isNaN(x)) bad = true;
+    v[i.dataset.k] = x;
+  }
+  return { v, example: empty, bad };
+}
+function resultsHTML(rows, example) {
+  return `<div class="res-head">Result${example ? ' <span class="pill">Example</span>' : ''}</div>` +
+    rows.map(([l, val, main, money = true, suffix = '']) => `<button class="res${main ? ' main' : ''}" data-v="${isFinite(val) ? val : ''}"><span class="rl">${esc(l)}</span><span class="rv">${isFinite(val) ? numHTML(fmtTo(val, { money })) + suffix : '—'}</span></button>`).join('');
+}
+const TOOLS = {
+  tip(card) {
+    const { v, example } = toolVals(card);
+    const tip = v.bill * v.tip / 100, total = v.bill + tip, people = Math.max(1, Math.round(v.people || 1));
+    $$('#tipChips .chip').forEach(c => c.setAttribute('aria-pressed', +c.dataset.tipv === v.tip));
+    const out = $('[data-out]', card); out.classList.toggle('example', example);
+    out.innerHTML = resultsHTML([['Tip', tip], ['Total', total], [people > 1 ? `Each of ${people} pays` : 'You pay', total / people, true]], example);
+  },
+  discount(card) {
+    const { v, example } = toolVals(card);
+    const save = v.price * v.off / 100, after = v.price - save, tax = after * v.tax / 100;
+    const out = $('[data-out]', card); out.classList.toggle('example', example);
+    const rows = [['You save', save], ['After discount', after]];
+    if (v.tax) rows.push([`Tax (${fmtTo(v.tax)}%)`, tax]);
+    rows.push(['Final price', after + tax, true]);
+    out.innerHTML = resultsHTML(rows, example);
+  },
+  percent(card) {
+    const pairs = [['a1', 'b1'], ['a2', 'b2'], ['a3', 'b3']];
+    pairs.forEach(([ka, kb], i) => {
+      const ia = $(`[data-k="${ka}"]`, card), ib = $(`[data-k="${kb}"]`, card);
+      const ex = !ia.value.trim() && !ib.value.trim();
+      const get = el => el.value.trim() ? evalField(el.value) : (ex ? +el.dataset.ph : NaN);
+      const a = get(ia), b = get(ib);
+      [ia, ib].forEach(el => el.classList.toggle('bad', !!el.value.trim() && Number.isNaN(evalField(el.value))));
+      let val, txt;
+      if (i === 0) { val = a * b / 100; txt = fmtTo(val); }
+      else if (i === 1) { val = b === 0 ? NaN : a / b * 100; txt = isFinite(val) ? fmtTo(val) + '%' : '—'; }
+      else { val = a === 0 ? NaN : (b - a) / Math.abs(a) * 100; txt = isFinite(val) ? (val > 0 ? '+' : '') + fmtTo(val) + '%' + (val > 0 ? ' ↑' : val < 0 ? ' ↓' : '') : '—'; }
+      const o = $(`[data-o="${i + 1}"]`, card);
+      o.textContent = isFinite(val) ? '= ' + txt : '—'; o.dataset.v = isFinite(val) ? val : ''; o.classList.toggle('example', ex);
+    });
+  },
+  margin(card) {
+    const { v, example } = toolVals(card);
+    const profit = v.price - v.cost;
+    const out = $('[data-out]', card); out.classList.toggle('example', example);
+    out.innerHTML = resultsHTML([['Profit', profit, true], ['Margin', v.price ? profit / v.price * 100 : NaN, false, false, '%'], ['Markup', v.cost ? profit / v.cost * 100 : NaN, false, false, '%']], example);
+    const o = $('[data-o="target"]', card), t = v.target;
+    const price = t < 100 ? v.cost / (1 - t / 100) : NaN;
+    o.textContent = isFinite(price) ? '= ' + fmtTo(price, { money: true }) : 'Margin must be under 100%';
+    o.dataset.v = isFinite(price) ? price : ''; o.classList.toggle('example', example);
+  },
+  dates(card) {
+    const a = $('#dt-a').valueAsDate, b = $('#dt-b').valueAsDate;
+    const out = $('[data-out]', card);
+    if (a && b) {
+      const days = Math.round((b - a) / 864e5), sign = days < 0 ? -1 : 1, n = Math.abs(days);
+      let wd = 0; const s = new Date(Math.min(a, b));
+      for (let i = 0; i < n && i < 40000; i++) { const g = s.getUTCDay(); if (g !== 0 && g !== 6) wd++; s.setUTCDate(s.getUTCDate() + 1); }
+      const w = Math.floor(n / 7), r = n % 7;
+      out.innerHTML = `<div class="res-head">Between the dates</div>` +
+        `<button class="res main" data-v="${days}"><span class="rl">Days</span><span class="rv">${fmtTo(days)}</span></button>` +
+        `<button class="res" data-v="${n / 7}"><span class="rl">Weeks</span><span class="rv">${w} w ${r} d</span></button>` +
+        `<button class="res" data-v="${wd * sign}"><span class="rl">Weekdays (Mon–Fri)</span><span class="rv">${fmtTo(wd * sign)}</span></button>`;
+    } else out.innerHTML = '<div class="res-head">Pick two dates</div>';
+    const c = $('#dt-c').valueAsDate, ni = $('#dt-n');
+    const nd = ni.value.trim() ? evalField(ni.value) : +ni.dataset.ph;
+    const o = $('[data-o="add"]', card);
+    if (c && isFinite(nd)) {
+      const d = new Date(c); d.setUTCDate(d.getUTCDate() + Math.round(nd));
+      o.textContent = '= ' + d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+      o.dataset.v = ''; o.classList.toggle('example', !ni.value.trim());
+    } else o.textContent = '—';
+  }
+};
+function renderTools() {
+  $$('#toolChips .chip').forEach(c => c.setAttribute('aria-selected', c.dataset.tool === S.tool));
+  $$('.tool').forEach(c => { c.hidden = c.dataset.tool !== S.tool; });
+  const card = $(`.tool[data-tool="${S.tool}"]`); TOOLS[S.tool](card);
+}
+// restore saved tool inputs
+$$('.tool input').forEach(i => { if (TV[i.id] != null) i.value = TV[i.id]; });
+(function initDates() {
+  const iso = d => d.toISOString().slice(0, 10);
+  const today = new Date(); const t0 = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  if (!$('#dt-a').value) $('#dt-a').value = iso(t0);
+  if (!$('#dt-c').value) $('#dt-c').value = iso(t0);
+  if (!$('#dt-b').value) { const x = new Date(t0); x.setUTCDate(x.getUTCDate() + 30); $('#dt-b').value = iso(x); }
+})();
+$('#toolChips').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (!b) return; S.tool = b.dataset.tool; saveS(); renderTools(); });
+$('#panel-tools').addEventListener('input', e => {
+  if (!e.target.matches('input')) return;
+  TV[e.target.id] = e.target.value; store.set('tools', TV); renderTools();
+});
+$('#panel-tools').addEventListener('click', e => {
+  const tv = e.target.closest('[data-tipv]');
+  if (tv) { const i = $('#t-tip'); i.value = tv.dataset.tipv; TV['t-tip'] = i.value; store.set('tools', TV); renderTools(); tick(); return; }
+  const st = e.target.closest('[data-step]');
+  if (st) { const i = $('#t-people'); const cur = i.value.trim() ? Math.round(evalField(i.value)) || 1 : (+i.dataset.ph); i.value = Math.max(1, cur + +st.dataset.step); TV['t-people'] = i.value; store.set('tools', TV); renderTools(); tick(); return; }
+  const r = e.target.closest('.res, .sentence-out');
+  if (r && r.dataset.v !== '' && r.dataset.v != null) copyValue(+fmtTo(+r.dataset.v, { money: true, group: false }), { offerUse: true });
+});
+
+/* ================= settings ================= */
+$('#openSettings').addEventListener('click', openSettings);
+function openSettings() {
+  const sw = (id, label, on) => `<label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span>${label}</span></label>`;
+  openSheet(`<h2 id="sheetTitle">Settings</h2>
+    <div class="set-group"><span class="label">Theme</span>
+      <div class="seg" id="themeSeg">${['system', 'light', 'dark'].map(t => `<button data-theme-v="${t}" aria-pressed="${S.theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
+    <div class="set-group">
+      ${sw('setHaptics', 'Vibrate on key press', S.haptics)}
+      ${sw('setSound', 'Key click sound', S.sound)}
+      ${sw('setGroup', 'Show thousands separators', S.grouping)}
+      ${sw('setCopyGroup', 'Keep commas when copying', S.copyGrouping)}
+    </div>
+    <div class="set-group"><span class="label">Tape</span>
+      <ul class="menu"><li><button class="danger" id="setClear">${ICON.del}Clear all ${H.length} entries</button></li></ul></div>
+    <div class="set-group"><span class="label">Put Tally in your Edge panel</span>
+      <ol class="howto">
+        <li>Open Tally’s web address in <b>Chrome</b> or <b>Samsung Internet</b>, open the menu and choose <b>Add to home screen → Install</b>.</li>
+        <li>Go to <b>Settings → Display → Edge panels → Panels</b>, tap <b>Edit</b> under <b>Apps</b> and add <b>Tally</b>.</li>
+        <li>Swipe the Edge handle, then drag Tally onto the screen to open it as a pop-up. Make the window narrow and it works like a side panel. Shrink it to a bubble when you’re done.</li>
+      </ol>
+      <p class="small">Tally saves your tape, settings and last rates on this phone only.</p></div>`, body => {
+    body.querySelector('#themeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.theme = b.dataset.themeV; saveS(); applyTheme(); $$('#themeSeg button', body).forEach(x => x.setAttribute('aria-pressed', x === b)); });
+    body.querySelector('#setHaptics').addEventListener('change', e => { S.haptics = e.target.checked; saveS(); buzz(12); });
+    body.querySelector('#setSound').addEventListener('change', e => { S.sound = e.target.checked; saveS(); tick(); });
+    body.querySelector('#setGroup').addEventListener('change', e => { S.grouping = e.target.checked; saveS(); render(); renderTape(false); });
+    body.querySelector('#setCopyGroup').addEventListener('change', e => { S.copyGrouping = e.target.checked; saveS(); });
+    const clr = body.querySelector('#setClear'); clr.disabled = !H.length; if (!H.length) clr.style.opacity = .45;
+    clr.addEventListener('click', () => { closeSheet(); clearTape(); });
+  });
+}
+
+/* ================= boot ================= */
+applyTheme();
+renderSci();
+renderTape();
+render();
+goTab(['calc', 'convert', 'tools'].includes(S.tab) ? S.tab : 'calc');
+let rz; new ResizeObserver(() => { cancelAnimationFrame(rz); rz = requestAnimationFrame(fitExpr); }).observe(exprEl);
+document.fonts && document.fonts.ready.then(fitExpr);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+window.__tally = { evaluate, fmt, get T() { return T; } };
+
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && window.top === window.self && document.querySelector('link[rel="manifest"]')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+})();
+</script>
+</body>
+</html>

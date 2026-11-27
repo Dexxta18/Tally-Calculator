@@ -1,0 +1,39 @@
+{
+  "id": "./",
+  "name": "Tally Calculator",
+  "short_name": "Tally",
+  "description": "Calculator with a reusable tape, converters and money tools.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#161514",
+  "theme_color": "#161514",
+  "categories": [
+    "utilities",
+    "finance"
+  ],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
